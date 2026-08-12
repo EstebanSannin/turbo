@@ -47,7 +47,9 @@ local flags = {
     S_IRWXO = octal('00007'),
     S_IROTH = octal('00004'),
     S_IWOTH = octal('00002'),
-    S_IXOTH = octal('00001')
+    S_IXOTH = octal('00001'),
+    -- Used by the arm64 fstatat path (see fs.lua); harmless elsewhere.
+    AT_FDCWD = -100
 }
 
 local cmds
@@ -121,6 +123,25 @@ elseif ffi.arch == "arm" then
         SYS_clock_gettime    = 263,
         SYS_clock_getres     = 264,
         SYS_clock_nanosleep  = 265
+    }
+elseif ffi.arch == "arm64" then
+    -- aarch64 uses the asm-generic syscall table and, being a "new" arch,
+    -- dropped stat/lstat/getdents entirely: only newfstatat/statx/getdents64
+    -- exist. fs.stat() calls SYS_newfstatat (with AT_FDCWD) instead of SYS_stat.
+    cmds = {
+        SYS_newfstatat       = 79,
+        SYS_fstat            = 80,
+        SYS_statx            = 291,
+        SYS_getdents64       = 61,
+        SYS_io_setup         = 0,
+        SYS_io_destroy       = 1,
+        SYS_io_submit        = 2,
+        SYS_io_cancel        = 3,
+        SYS_io_getevents     = 4,
+        SYS_clock_settime    = 112,
+        SYS_clock_gettime    = 113,
+        SYS_clock_getres     = 114,
+        SYS_clock_nanosleep  = 115
     }
 elseif ffi.arch == "mipsel" or ffi.arch == "mips" then
     cmds = {

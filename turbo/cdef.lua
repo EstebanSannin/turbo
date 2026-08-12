@@ -322,7 +322,11 @@ if platform.__LINUX__ then
                 uint64_t u64;
             } epoll_data_t;
         ]]
-        if platform.__ABI32__ or platform.__PPC64__ then
+        if platform.__ABI32__ or platform.__PPC64__ or platform.__ARM64__ then
+            -- struct epoll_event is packed ONLY on x86_64; on aarch64 (like
+            -- ppc64le) it is naturally aligned -> 4 bytes padding before data.
+            -- Using the packed layout here misreads data.fd as 0 and epoll
+            -- busy-loops ("no handler for fd: 0").
             ffi.cdef[[
                 struct epoll_event{
                     unsigned int events;
@@ -509,6 +513,33 @@ if platform.__LINUX__ then
                 unsigned long   st_ctime_nsec;
                 unsigned long   __unused4;
                 unsigned long   __unused5;
+              };
+            ]]
+        elseif platform.__ARM64__ then
+            -- aarch64 uses the asm-generic 64-bit struct stat
+            -- (uapi/asm-generic/stat.h), as returned by newfstatat/statx.
+            ffi.cdef[[
+              struct stat {
+                unsigned long   st_dev;
+                unsigned long   st_ino;
+                unsigned int    st_mode;
+                unsigned int    st_nlink;
+                unsigned int    st_uid;
+                unsigned int    st_gid;
+                unsigned long   st_rdev;
+                unsigned long   __pad1;
+                long            st_size;
+                int             st_blksize;
+                int             __pad2;
+                long            st_blocks;
+                long            st_atime;
+                unsigned long   st_atime_nsec;
+                long            st_mtime;
+                unsigned long   st_mtime_nsec;
+                long            st_ctime;
+                unsigned long   st_ctime_nsec;
+                unsigned int    __unused4;
+                unsigned int    __unused5;
               };
             ]]
         elseif platform.__MIPSEL__ then

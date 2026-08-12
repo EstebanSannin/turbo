@@ -39,5 +39,7 @@ return {
     __PPC__ = ffi.arch == "ppc",
     __PPC64__ = ffi.arch == "ppc64le",
     __ARM__ = ffi.arch == "arm",
+    -- LuaJIT reports aarch64 as "arm64" (not "aarch64").
+    __ARM64__ = ffi.arch == "arm64",
     __MIPSEL__ = ffi.arch == "mipsel" or ffi.arch == "mips",
 }

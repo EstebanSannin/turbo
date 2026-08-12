@@ -16,6 +16,7 @@
 
 local ffi = require "ffi"
 local syscall = require "turbo.syscall"
+local platform = require "turbo.platform"
 
 local fs = {}
 
@@ -28,7 +29,18 @@ fs.PATH_MAX = 4096
 function fs.stat(path, buf)
     local stat_t = ffi.typeof("struct stat")
     if not buf then buf = stat_t() end
-    local ret = ffi.C.syscall(syscall.SYS_stat, path, buf)
+    local ret
+    if platform.__ARM64__ then
+        -- aarch64 has no stat(2); use newfstatat(AT_FDCWD, path, buf, 0),
+        -- which resolves relative paths the same way plain stat() did.
+        -- The integer args must be passed as typed cdata: in a variadic call
+        -- LuaJIT promotes bare Lua numbers to double (FP registers), so on
+        -- arm64 AT_FDCWD/flags would never reach the integer arg registers.
+        ret = ffi.C.syscall(syscall.SYS_newfstatat,
+            ffi.cast("long", syscall.AT_FDCWD), path, buf, ffi.cast("long", 0))
+    else
+        ret = ffi.C.syscall(syscall.SYS_stat, path, buf)
+    end
     if ret == -1 then
         return -1, ffi.string(ffi.C.strerror(ffi.errno()))
     end
