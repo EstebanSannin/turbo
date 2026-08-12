@@ -668,6 +668,12 @@ if _G.TURBO_SSL then
         void ERR_free_strings(void);
         int SSL_library_init(void);
         void EVP_cleanup(void);
+        /* OpenSSL >= 1.1.0: real exported symbols that replaced the legacy
+           init calls / SSLv23_*_method macros (which are no longer symbols). */
+        int OPENSSL_init_ssl(uint64_t opts, const void *settings);
+        const SSL_METHOD *TLS_method(void);
+        const SSL_METHOD *TLS_server_method(void);
+        const SSL_METHOD *TLS_client_method(void);
         SSL_CTX *SSL_CTX_new(const SSL_METHOD *meth);
         void SSL_CTX_free(SSL_CTX *);
         int SSL_CTX_use_PrivateKey_file(

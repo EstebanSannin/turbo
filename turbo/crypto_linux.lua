@@ -71,15 +71,42 @@ function crypto.ERR_error_string(rc)
     return ffi.string(buf)
 end
 
+-- True when the loaded OpenSSL exports the >= 1.1.0 API. In 1.1.0 the old
+-- init calls (SSL_library_init/SSL_load_error_strings) and the SSLv23_*_method
+-- selectors became header macros and are no longer exported symbols, so FFI
+-- cannot bind them on libssl.so.1.1/.3. Probe once via pcall (indexing an
+-- absent symbol throws) and branch the whole module on the result.
+local function has_symbol(name)
+    return pcall(function() return lssl[name] end)
+end
+local openssl_11 = has_symbol("OPENSSL_init_ssl")
+
+--- Select an SSL_METHOD in a version-agnostic way.
+-- @param client (Boolean) client method if true, else server method.
+local function tls_method(client)
+    if openssl_11 then
+        return client and lssl.TLS_client_method() or lssl.TLS_server_method()
+    end
+    return client and lssl.SSLv23_client_method()
+        or lssl.SSLv23_server_method()
+end
+crypto.tls_method = tls_method
+
 --- Initialize the SSL library.
 -- Can be called multiple times without causing any pain. If the library is
 -- already loaded it will pass.
 function crypto.ssl_init()
     if not _G._TURBO_SSL_INITED then
        _TURBO_SSL_INITED = true
-        lssl.SSL_load_error_strings()
-        lssl.SSL_library_init()
-        lssl.OPENSSL_add_all_algorithms_noconf()
+        if openssl_11 then
+            -- OpenSSL >= 1.1.0 initialises itself lazily; this is optional
+            -- but keeps the explicit-init contract. 0 flags = defaults.
+            lssl.OPENSSL_init_ssl(0, nil)
+        else
+            lssl.SSL_load_error_strings()
+            lssl.SSL_library_init()
+            lssl.OPENSSL_add_all_algorithms_noconf()
+        end
     end
 end
 if _G.TURBO_SSL then
@@ -107,7 +134,7 @@ function crypto.ssl_create_client_context(
     -- Use standardish path to ca-certificates if not specified by user.
     -- May not be present on all Unix systems.
     ca_cert_path = ca_cert_path or "/etc/ssl/certs/ca-certificates.crt"
-    meth = sslv or lssl.SSLv23_client_method()
+    meth = sslv or tls_method(true)
     if meth == nil then
         err = lssl.ERR_peek_error()
         lssl.ERR_clear_error()
@@ -172,7 +199,7 @@ function crypto.ssl_create_server_context(cert_file, prv_file, ca_cert_path, ssl
     elseif not prv_file then
         return -1, "No priv file given in arguments";
     end
-    meth = sslv or lssl.SSLv23_server_method()
+    meth = sslv or tls_method(false)
     if meth == nil then
         err = lssl.ERR_peek_error()
         lssl.ERR_clear_error()
